@@ -16,7 +16,7 @@ pub fn main() !void {
     }
     defer posix.close(socket_fd);
 
-    std.debug.print("server addr: {any}\n ", .{server_addr});
+    std.debug.print("server addr: {any}\n", .{server_addr});
     try posix.bind(socket_fd, @ptrCast(&server_addr), @sizeOf(@TypeOf(server_addr)));
     try posix.listen(socket_fd, @as(u31, 5));
 
@@ -30,9 +30,8 @@ pub fn main() !void {
     if (data_received < 0) {
         std.debug.panic("data has no received", .{});
     }
-    std.debug.print("{s}\n", .{buffer});
-
-    std.debug.print("{any}\n", .{client_fd});
+    const message = buffer[0..data_received];
+    std.debug.print("{s}\n", .{message});
 }
 
 fn handleConnection() void {}
