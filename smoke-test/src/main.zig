@@ -5,6 +5,7 @@ const net = std.net;
 
 pub fn main() !void {
     const localhost = [4]u8{ 127, 0, 0, 1 };
+    var client_fd: posix.socket_t = undefined;
     const server_addr = net.Address.initIp4(localhost, 8080);
     var client_addr = net.Address.initIp4(.{ 0, 0, 0, 0 }, 0);
     var client_addr_len = client_addr.getOsSockLen();
@@ -21,8 +22,7 @@ pub fn main() !void {
     try posix.listen(socket_fd, @as(u31, 5));
 
     while (true) {
-        const client_fd = try posix.accept(socket_fd, @ptrCast(&client_addr), &client_addr_len, 0);
-        defer posix.close(client_fd);
+        client_fd = try posix.accept(socket_fd, @ptrCast(&client_addr), &client_addr_len, 0);
         if (client_fd == -1) {
             std.debug.panic("failed to accept connection", .{});
         }
@@ -42,9 +42,9 @@ pub fn main() !void {
         std.debug.print("sent to client : {any}\n", .{client_addr});
         std.debug.print("sent message : {s}\n", .{message});
     }
+    defer posix.close(client_fd);
 }
 
-fn handleConnection() void {}
 
 // send data to a server and echo the data back
 // receive data from a client, send it back unmodified
