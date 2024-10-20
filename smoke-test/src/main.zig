@@ -11,18 +11,19 @@ pub fn main() !void {
     var client_addr_len = client_addr.getOsSockLen();
     var buffer: [1024]u8 = undefined;
 
-    const socket_fd = try posix.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
-    if (socket_fd == -1) {
+    const srv_fd = try posix.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
+    if (srv_fd == -1) {
         std.debug.panic("failed to create socket", .{});
     }
-    defer posix.close(socket_fd);
+    defer posix.close(srv_fd);
+    try posix.setsockopt(srv_fd, posix.SOL.SOCKET, posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
 
     std.debug.print("server addr: {any}\n", .{server_addr});
-    try posix.bind(socket_fd, @ptrCast(&server_addr), @sizeOf(@TypeOf(server_addr)));
-    try posix.listen(socket_fd, @as(u31, 5));
+    try posix.bind(srv_fd, @ptrCast(&server_addr), @sizeOf(@TypeOf(server_addr)));
+    try posix.listen(srv_fd, @as(u31, 5));
 
     while (true) {
-        client_fd = try posix.accept(socket_fd, @ptrCast(&client_addr), &client_addr_len, 0);
+        client_fd = try posix.accept(srv_fd, @ptrCast(&client_addr), &client_addr_len, 0);
         if (client_fd == -1) {
             std.debug.panic("failed to accept connection", .{});
         }
@@ -45,9 +46,8 @@ pub fn main() !void {
     defer posix.close(client_fd);
 }
 
-
 // send data to a server and echo the data back
 // receive data from a client, send it back unmodified
-// 1.Accept TCP Connections
+// 1. Accept TCP Connections
 // 2. Handle at least 5 connections
 // Implement TCP Echo Service : https://www.rfc-editor.org/rfc/rfc862.htl
