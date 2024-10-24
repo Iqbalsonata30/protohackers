@@ -66,7 +66,6 @@ test isPrime {
         input: i32,
         output: bool,
     };
-
     const test_cases = [_]TestCase{
         .{
             .input = 123,
