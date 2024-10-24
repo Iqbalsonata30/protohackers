@@ -5,13 +5,19 @@
 //  Whenever you receive a malformed request, send back a single malformed response, and disconnect the client.
 //  Handle at least 5 Connection
 //
+//  The client have to send json
+//  {"method":string, "prime":number}
+//  method only contain isPrime and prime field must contain a valid number.
+//
+//  the server should response  like this
 //  Example Response
-//  {"method":"isPrime","prime":false}
+//  {"method":"isPrime","prime":bool}
 //
 
 const std = @import("std");
 const posix = std.posix;
 const net = std.net;
+const testing = std.testing;
 
 pub fn main() !void {
     const sock_addr = net.Ip4Address.init([4]u8{ 0, 0, 0, 0 }, 1234);
@@ -40,5 +46,40 @@ pub fn main() !void {
 
     while (conn > 0) : (conn = try posix.accept(sock_fd, @ptrCast(&peer_socket), &peer_socket_len, 0)) {
         std.debug.print("address:{any} is connecting\n", .{peer_socket});
+    }
+}
+
+/// the number is prime if the value can be divided by 1 or itself
+fn isPrime(num: i32) bool {
+    if (num <= 1) {
+        return false;
+    }
+    var i: i32 = 2;
+    while (i * i <= num) : (i += 1) {
+        if (@mod(num, i) == 0) return false;
+    }
+    return true;
+}
+
+test isPrime {
+    const TestCase = struct {
+        input: i32,
+        output: bool,
+    };
+
+    const test_cases = [_]TestCase{
+        .{
+            .input = 123,
+            .output = false,
+        },
+        .{
+            .input = 2,
+            .output = true,
+        },
+    };
+
+    for (test_cases) |tc| {
+        const res = isPrime(tc.input);
+        try testing.expect(res == tc.output);
     }
 }
