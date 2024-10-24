@@ -66,16 +66,16 @@ test isPrime {
         input: i32,
         output: bool,
     };
-    const test_cases = [_]TestCase{
-        .{
-            .input = 123,
-            .output = false,
-        },
-        .{
-            .input = 2,
-            .output = true,
-        },
-    };
+    const test_cases = [_]TestCase{ .{
+        .input = 123,
+        .output = false,
+    }, .{
+        .input = 2,
+        .output = true,
+    }, .{
+        .input = 67,
+        .output = true,
+        }, };
 
     for (test_cases) |tc| {
         const res = isPrime(tc.input);
