@@ -63,8 +63,7 @@ fn isPrime(num: i32) bool {
     return true;
 }
 
-test isPrime {
-    const TestCase = struct {
+test isPrime { const TestCase = struct {
         input: i32,
         output: bool,
     };
@@ -88,4 +87,3 @@ test isPrime {
         try testing.expect(res == tc.output);
     }
 }
-
