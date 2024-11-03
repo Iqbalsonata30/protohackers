@@ -36,7 +36,6 @@ pub fn main() !void {
 
         var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer arena.deinit();
-
         const allocator = arena.allocator();
 
         var thread = try std.Thread.spawn(.{}, worker, .{ conn, allocator });
@@ -46,36 +45,38 @@ pub fn main() !void {
 
 fn worker(conn: posix.socket_t, allocator: Allocator) !void {
     var buffer: [1024]u8 = undefined;
+    const message_malformed = "your request is malformed\n";
     var data_received = try posix.read(conn, &buffer);
-    const message_malformed = "your request is malformed";
 
     while (data_received > 0) : (data_received = try posix.read(conn, &buffer)) {
         const message = buffer[0..data_received];
-
         const parsed = json.parseFromSliceLeaky(json.Value, allocator, message, .{}) catch |e| {
             _ = try posix.send(conn, message_malformed, 0);
+            std.debug.print("malformed request : {s}", .{message});
             std.debug.print("error parse json : {?}\n", .{e});
-            posix.close(conn);
-            return e;
+            continue;
         };
+
         const method = parsed.object.get("method").?.string;
         if (!std.mem.eql(u8, method, "isPrime")) {
             _ = try posix.send(conn, message_malformed, 0);
-            posix.close(conn);
+            continue;
         }
         if (parsed.object.get("number")) |v| {
             if (v != .integer) {
                 _ = try posix.send(conn, message_malformed, 0);
-                posix.close(conn);
+                continue;
             } else {
                 const is_prime = isPrime(v.integer);
                 const json_response = Response{
                     .method = method,
                     .prime = is_prime,
                 };
-
-                const response = try json.stringifyAlloc(allocator, json_response, .{});
-                _ = try posix.send(conn, response, 0);
+                const parsed_json = try json.stringifyAlloc(allocator, json_response, .{});
+                const response = try std.fmt.allocPrint(allocator, "{s}\n", .{parsed_json});
+                const sent_message = try posix.send(conn, response, 0);
+                std.debug.print("received message:{s}", .{message});
+                std.debug.print("sent message: {s}\n", .{response[0..sent_message]});
             }
         }
     }
