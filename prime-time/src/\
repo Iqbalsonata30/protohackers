@@ -50,6 +50,7 @@ fn worker(conn: posix.socket_t, allocator: Allocator) !void {
 
     while (data_received > 0) : (data_received = try readRequest(conn, &buffer, buf_size)) {
         std.debug.print("data received: {d}\n", .{data_received});
+        std.debug.print("buffer : {s}\n", .{buffer});
         const message = buffer[0..data_received];
         const parsed = json.parseFromSliceLeaky(json.Value, allocator, message, .{}) catch |e| {
             _ = try posix.send(conn, message_malformed, 0);
