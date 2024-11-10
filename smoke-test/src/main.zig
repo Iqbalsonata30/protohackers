@@ -10,57 +10,66 @@ const assert = std.debug.assert;
 const net = std.net;
 
 pub fn main() !void {
-    var client_fd: posix.socket_t = undefined;
-    const server_addr = net.Address.initIp4(.{ 0, 0, 0, 0 }, 9999);
+    const address = try net.Address.resolveIp("0.0.0.0", 1234);
 
-    const srv_fd = try posix.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
-    if (srv_fd == -1) {
-        std.debug.panic("failed to create socket", .{});
-    }
-    defer posix.close(srv_fd);
+    const listener = try posix.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
+    defer posix.close(listener);
 
-    try posix.setsockopt(srv_fd, posix.SOL.SOCKET, posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
-    if (@hasDecl(posix.SO, "REUSEPORT")) {
-        try posix.setsockopt(srv_fd, posix.SOL.SOCKET, posix.SO.REUSEPORT, &std.mem.toBytes(@as(c_int, 1)));
-    }
+    try posix.setsockopt(listener, posix.SOL.SOCKET, posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
+    posix.bind(listener, @ptrCast(&address), address.getOsSockLen()) catch |err| {
+        std.debug.print("failed to bind socket : {?}\n", .{err});
+        return err;
+    };
 
-    try posix.bind(srv_fd, &server_addr.any, @sizeOf(@TypeOf(server_addr)));
-    try posix.listen(srv_fd, 10);
+    posix.listen(listener, 128) catch |err| {
+        std.debug.print("failed to listen socket : {?}\n", .{err});
+        return err;
+    };
 
-    var client_addr = net.Address.initIp4(.{ 0, 0, 0, 0 }, 0);
-    var client_addr_len: posix.socklen_t = @sizeOf(@TypeOf(client_addr));
+    while (true) {
+        var buf: [1024]u8 = undefined;
+        var client_address: net.Address = undefined;
+        var client_address_len: posix.socklen_t = @sizeOf(posix.sockaddr.in);
 
-    std.debug.print("server running on port {d}\n", .{server_addr.getPort()});
-    client_fd = try posix.accept(srv_fd, &client_addr.any, &client_addr_len, 0);
-    while (client_fd > 0) : (client_fd = try posix.accept(srv_fd, &client_addr.any, &client_addr_len, 0)) {
-        const thread = try std.Thread.spawn(.{}, worker, .{client_fd});
-        defer thread.join();
+        const conn = posix.accept(listener, @ptrCast(&client_address), &client_address_len, 0) catch |err| {
+            std.debug.print("failed to accept connection : {?}\n", .{err});
+            continue;
+        };
+        defer posix.close(conn);
+
+        std.debug.print("{any} is connecting\n", .{client_address});
+        echoMsg(conn, &buf) catch |err| switch (err) {
+            error.Closed => {
+                std.debug.print("client diconnected\n", .{});
+                continue;
+            },
+            else => {
+                std.debug.print("failed to read connection : {?}\n", .{err});
+                continue;
+            },
+        };
     }
 }
 
-fn worker(client_fd: posix.socket_t) !void {
-    std.debug.print("worker starting...\n", .{});
-
-    var data_size: usize = 0;
-    var buffer: [1024]u8 = undefined;
-
-    data_size = try posix.recv(client_fd, &buffer, 0);
-    while (data_size > 0) {
-        std.debug.print("size of the data : {d}\n", .{data_size});
-
-        const message = buffer[0..data_size];
-        const data_sent = try posix.send(client_fd, message, 0);
-        std.debug.assert(data_sent != 0);
-
-        std.debug.print("received message : {s}", .{message});
-        std.debug.print("sent message : {s}", .{message});
-        data_size = try posix.recv(client_fd, &buffer, 0);
+fn echoMsg(socket: posix.socket_t, buf: []u8) !void {
+    var read = try posix.read(socket, buf);
+    while (read > 0) : (read = try posix.read(socket, buf)) {
+        const msg = buf[0..read];
+        try writeMsg(socket, msg);
     }
 
-    if (data_size < 0) {
-        std.debug.panic("received failed\n", .{});
-    } else {
-        std.debug.print("client disconnect\n", .{});
+    if (read == 0) {
+        return error.Closed;
     }
-    defer posix.close(client_fd);
+}
+
+fn writeMsg(socket: posix.socket_t, msg: []u8) !void {
+    var pos: usize = 0;
+    while (pos < msg.len) {
+        const written = try posix.write(socket, msg[pos..]);
+        if (written == 0) {
+            return error.Closed;
+        }
+        pos += written;
+    }
 }
